@@ -49,19 +49,58 @@ const devUsername = process.env.DEV_USERNAME;
 const authorizedUsers = JSON.parse(process.env.AUTHORIZED_USERS);
 let lastAnswers = "";
 
+bot.action('send_msg_togrp', async (ctx) => {
+    if (ctx.chat.type === 'private' && ctx.chat.id === developerId) {
+        isWaitingForMessage = true;  // Set the flag to true to indicate we're waiting for a message
+        await ctx.reply("Please type the message you want to send to all groups.");
+    }
+});
 
-   
-// bot.use((ctx, next) => {
-//     if (ctx.chat.type !== 'group' && ctx.chat.type !== 'supergroup') {
-//        ctx.reply("Sorry the bot for now only works with groups soo!, BUT more things coming soon!")
-//        ctx.reply("قم باضافة البوت الى مجموعتك للبدأ !! 😊")
-//     }
-//     return; 
-// });
+//const groupData = loadGroupData();
+bot.use( (ctx, next) => {
 
 
+    if (ctx.chat.type === 'private') {
+        if (ctx.chat.id === developerId) {
+          if(ctx.msg && ctx.msg.text === '/start'){
+               ctx.reply(
+                  "Hi Dev, Options",
+                  Markup.button.callback(["Send Message to all groups", "send_msg_togrp"])
+                );
+            }
+        } else {
+            
+             ctx.reply("Sorry, this bot only works in groups right now!");
+        }
+        return;
+    }
+    return next();
+});
 
- // Event listener when a new member (your bot) is added to a group
+
+bot.on('message', async (msgCtx) => {
+    if (msgCtx.chat.id === developerId && isWaitingForMessage && msgCtx.message.text) {
+        const messageToSend = msgCtx.message.text;
+        const groupData = loadGroupData();
+
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const groupId in groupData.grps) {
+            try {
+                await bot.telegram.sendMessage(groupId, messageToSend);
+                successCount++;
+            } catch (error) {
+                console.error(`Failed to send message to group ${groupId}:`, error.message);
+                failCount++;
+            }
+        }
+
+        await msgCtx.reply(`✅ Message sent to ${successCount} groups.\n❌ Failed to send to ${failCount} groups.`);
+        isWaitingForMessage = false;  // Reset the flag after the message has been sent
+    }
+});
+
  bot.on('new_chat_members', async (ctx) => {
      const chat = ctx.chat;
      const chatId = chat.id
@@ -81,9 +120,30 @@ let lastAnswers = "";
      }
  });
 
+ const handleSendMessage = async (chatId, message) => {
+    try {
+        await bot.telegram.sendMessage(chatId, message);
+    } catch (error) {
+        if (error.response && error.response.error_code === 403) {
+            console.error(`The bot was blocked by the user (chat_id: ${chatId}).`);
+        } else {
+            console.error(`An unexpected error occurred:`, error);
+        }
+    }
+};
 
-bot.start((ctx) => {
-    ctx.reply('مرحبًا! 👋 أنا بوت تجريبي 🤖. للاستعمال اضغط /thamer.\nلأي مشاكل أو استفسارات، تواصل مع المطوّر @jjroutledg.\nالبوت ما زال في طور التطوير 🚧، شكرًا على تفهّمك! 😊', { reply_to_message_id: ctx.message.message_id });
+
+bot.start(async (ctx) => {
+    const chatId = ctx.chat.id;
+    try {
+       await ctx.reply('مرحبًا! 👋 أنا بوت تجريبي 🤖. للاستعمال اضغط /thamer.\nلأي مشاكل أو استفسارات، تواصل مع المطوّر @jjroutledg.\nالبوت ما زال في طور التطوير 🚧، شكرًا على تفهّمك! 😊', { reply_to_message_id: ctx.message.message_id });    
+    } catch (error) {
+        if (error.response && error.response.error_code === 403) {
+            console.error(`The bot was blocked by the user (chat_id: ${chatId}).`);
+        } else {
+            console.error(`An unexpected error occurred:`, error);
+        } 
+    }
 });
 
 

@@ -49,57 +49,59 @@ const devUsername = process.env.DEV_USERNAME;
 const authorizedUsers = JSON.parse(process.env.AUTHORIZED_USERS);
 let lastAnswers = "";
 
-bot.action('send_msg_togrp', async (ctx) => {
-    if (ctx.chat.type === 'private' && ctx.chat.id === developerId) {
-        isWaitingForMessage = true;  // Set the flag to true to indicate we're waiting for a message
-        await ctx.reply("Please type the message you want to send to all groups.");
-    }
-});
+// bot.action('send_msg_togrp', async (ctx) => {
+//     if (ctx.chat.type === 'private' && ctx.chat.id === developerId) {
+//         isWaitingForMessage = true;  // Set the flag to true to indicate we're waiting for a message
+//         await ctx.reply("Please type the message you want to send to all groups.");
+//     }
+// });
 
 //const groupData = loadGroupData();
-bot.use( (ctx, next) => {
-
-
-    if (ctx.chat.type === 'private') {
-        if (ctx.chat.id === developerId) {
-          if(ctx.msg && ctx.msg.text === '/start'){
-               ctx.reply(
-                  "Hi Dev, Options",
-                  Markup.button.callback(["Send Message to all groups", "send_msg_togrp"])
-                );
-            }
+bot.use(async (ctx, next) => {
+    try {
+        return next();
+    } catch (error) {
+        if (error.response && error.response.error_code === 403) {
+            console.error(`The bot was blocked by the user (chat_id: ${chatId}).`);
         } else {
-            
-             ctx.reply("Sorry, this bot only works in groups right now!");
+            console.error(`An unexpected error occurred:`, error);
         }
-        return;
     }
-    return next();
-});
+})
 
-
-bot.on('message', async (msgCtx) => {
-    if (msgCtx.chat.id === developerId && isWaitingForMessage && msgCtx.message.text) {
-        const messageToSend = msgCtx.message.text;
-        const groupData = loadGroupData();
-
-        let successCount = 0;
-        let failCount = 0;
-
-        for (const groupId in groupData.grps) {
-            try {
-                await bot.telegram.sendMessage(groupId, messageToSend);
-                successCount++;
-            } catch (error) {
-                console.error(`Failed to send message to group ${groupId}:`, error.message);
-                failCount++;
+bot.use(async(ctx, next) => {
+    if(ctx.chat.type === "private" && ctx.from.id === developerId && ctx.msg.text === "/start"){
+        const groupsData = loadGroupData();
+        bot.action('smg', async (ctx) => {
+            if(ctx.from.id === developerId){
+                if (ctx.chat.type === 'private' && ctx.chat.id === developerId) {
+                    isWaitingForMessage = true;  // Set the flag to true to indicate we're waiting for a message
+                    await ctx.reply("Please type the message you want to send to all groups: ");
+                    const msgTosend = ctx.msg.text;
+                    let sucssG = 0;
+                    let failedG = 0;
+                    for(const groupData in groupsData.grps){
+                        try {
+                            await bot.telegram.sendMessage(groupData, msgTosend)
+                        } catch (error) {
+                           console.log(`Faild with ${groupData}`)  
+                        }
+                    }
+                }
+            }
+        })
+        const inlineKeyboard = {
+            reply_markup:{
+                inline_keyboard:[
+                [
+                    {text: "Send msg to groups", callback_data: 'smg'}
+                ]
+                ]
             }
         }
-
-        await msgCtx.reply(`✅ Message sent to ${successCount} groups.\n❌ Failed to send to ${failCount} groups.`);
-        isWaitingForMessage = false;  // Reset the flag after the message has been sent
+       await ctx.sendMessage("Hi there dev!", inlineKeyboard)
     }
-});
+})
 
  bot.on('new_chat_members', async (ctx) => {
      const chat = ctx.chat;
